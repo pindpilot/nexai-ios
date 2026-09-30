@@ -1,0 +1,34 @@
+name: Build unsigned NexAI IPA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nexai-unsigned
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate project
+        run: python3 1-generate-project.py && brew install xcodegen && xcodegen generate
+      - name: Build device app without signing
+        run: |
+          xcodebuild -project NexAI.xcodeproj -scheme NexAI -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build
+      - name: Package and inspect unsigned IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/NexAI.app Payload/
+          test -f Payload/NexAI.app/NexAI
+          /usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' Payload/NexAI.app/Info.plist
+          file Payload/NexAI.app/NexAI
+          zip -qr NexAI-unsigned.ipa Payload
+          unzip -t NexAI-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NexAI-unsigned-IPA
+          path: NexAI-unsigned.ipa
+          retention-days: 1
+          if-no-files-found: error
